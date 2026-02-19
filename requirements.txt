@@ -1,0 +1,9 @@
+langgraph
+langchain
+langchain-groq
+langchain_community
+tavily-python
+chromadb
+streamlit
+python-dotenv
+beautifulsoup4
