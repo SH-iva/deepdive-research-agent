@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import html2pdf from "html2pdf.js";
 
 const MOCK_REPORT = `## Executive Summary
 
@@ -233,6 +234,17 @@ export default function DeepDive() {
       setLoading(false);
       return;
     }
+  const downloadPDF = () => {
+  const element = resultsRef.current;
+  const opt = {
+    margin:       0.5,
+    filename:     'DeepDive_Report.pdf',
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#0C0B10' },
+    jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+  };
+  html2pdf().set(opt).from(element).save();
+};  
 
     try {
       const res = await fetch("https://deepdive-api-b6ww.onrender.com/api/research", {
@@ -273,37 +285,7 @@ export default function DeepDive() {
 
       <div style={{ maxWidth: "720px", margin: "0 auto", position: "relative", zIndex: 1 }}>
 
-        {/* Nav */}
-        <nav style={{
-          display: "flex", justifyContent: "space-between", alignItems: "center",
-          padding: "2rem 0", marginBottom: "0",
-        }}>
-          <span style={{
-            fontFamily: "'IBM Plex Mono', monospace",
-            fontSize: "0.7rem",
-            color: "rgba(245,240,232,0.25)",
-            letterSpacing: "0.2em",
-            textTransform: "uppercase",
-          }}>
-            v0.1 · beta
-          </span>
-          <button
-            className="deep-demo-btn"
-            onClick={() => setDemoMode(!demoMode)}
-            style={{
-              background: "none", border: "none", cursor: "pointer",
-              fontFamily: "'IBM Plex Mono', monospace",
-              fontSize: "0.7rem",
-              color: demoMode ? "rgba(180,160,120,0.8)" : "rgba(245,240,232,0.25)",
-              letterSpacing: "0.15em",
-              textTransform: "uppercase",
-              transition: "color 0.2s",
-              padding: "4px 0",
-            }}
-          >
-            {demoMode ? "● demo on" : "○ demo off"}
-          </button>
-        </nav>
+    
 
         {/* Hero */}
         <div style={{
@@ -508,7 +490,37 @@ export default function DeepDive() {
                   transition: "color 0.2s",
                 }}
               >
-                ← New query
+                ← New query <div style={{
+  display: "flex", justifyContent: "space-between", marginTop: "1.25rem",
+}}>
+  <button
+    className="deep-demo-btn"
+    onClick={() => { setReport(null); setQuery(""); }}
+    style={{
+      background: "none", border: "none", cursor: "pointer",
+      fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.68rem",
+      color: "rgba(245,240,232,0.2)", letterSpacing: "0.15em",
+      textTransform: "uppercase", transition: "color 0.2s",
+    }}
+  >
+    ← New query
+  </button>
+
+  <button
+    className="deep-btn"
+    onClick={downloadPDF}
+    style={{
+      background: "rgba(180,160,120,0.1)", border: "1px solid rgba(180,160,120,0.4)",
+      borderRadius: "6px", padding: "0.4rem 1rem", cursor: "pointer",
+      fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.68rem",
+      color: "rgba(180,160,120,0.9)", letterSpacing: "0.1em",
+      textTransform: "uppercase", transition: "all 0.2s",
+    }}
+  >
+    ↓ Download PDF
+  </button>
+</div>
+                
               </button>
             </div>
           </div>
