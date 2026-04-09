@@ -30,7 +30,12 @@ Competitive moats are now primarily data-driven rather than capital-driven — o
 - Bloomberg Terminal Data (live)
 - 11 additional peer-reviewed sources`;
 
-function renderMarkdown(text) {
+function renderMarkdown(text, isPrint = false) {
+  // Define themes: light for PDF, dark for UI
+  const textColor = isPrint ? "#111111" : "#F5F0E8";
+  const bodyColor = isPrint ? "#333333" : "rgba(245,240,232,0.7)";
+  const borderColor = isPrint ? "#E2E8F0" : "rgba(255,255,255,0.08)";
+
   const lines = text.split("\n");
   const elements = [];
   let key = 0;
@@ -44,11 +49,11 @@ function renderMarkdown(text) {
           fontFamily: "'DM Serif Display', Georgia, serif",
           fontSize: "1.25rem",
           fontWeight: 400,
-          color: "#F5F0E8",
+          color: textColor,
           marginTop: i === 0 ? 0 : "2rem",
           marginBottom: "0.75rem",
           paddingBottom: "0.5rem",
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          borderBottom: `1px solid ${borderColor}`,
           letterSpacing: "0.01em",
         }}>
           {line.replace("## ", "")}
@@ -60,14 +65,14 @@ function renderMarkdown(text) {
       elements.push(
         <li key={key++} style={{
           fontSize: "0.9rem",
-          color: "rgba(245,240,232,0.7)",
+          color: bodyColor,
           lineHeight: 1.8,
           marginBottom: "0.4rem",
           paddingLeft: "0.25rem",
         }}>
           {parts.map((p, idx) =>
             idx % 2 === 1
-              ? <strong key={idx} style={{ color: "#F5F0E8", fontWeight: 500 }}>{p}</strong>
+              ? <strong key={idx} style={{ color: textColor, fontWeight: 500 }}>{p}</strong>
               : p
           )}
         </li>
@@ -76,7 +81,7 @@ function renderMarkdown(text) {
       elements.push(
         <li key={key++} style={{
           fontSize: "0.9rem",
-          color: "rgba(245,240,232,0.7)",
+          color: bodyColor,
           lineHeight: 1.8,
           marginBottom: "0.4rem",
           paddingLeft: "0.25rem",
@@ -92,13 +97,13 @@ function renderMarkdown(text) {
       elements.push(
         <p key={key++} style={{
           fontSize: "0.9rem",
-          color: "rgba(245,240,232,0.7)",
+          color: bodyColor,
           lineHeight: 1.85,
           marginBottom: "0.25rem",
         }}>
           {parts.map((p, idx) =>
             idx % 2 === 1
-              ? <strong key={idx} style={{ color: "#F5F0E8", fontWeight: 500 }}>{p}</strong>
+              ? <strong key={idx} style={{ color: textColor, fontWeight: 500 }}>{p}</strong>
               : p
           )}
         </p>
@@ -106,6 +111,7 @@ function renderMarkdown(text) {
     }
   }
 
+  // List Grouping Logic
   const grouped = [];
   let listBuffer = [];
   let listType = null;
@@ -117,8 +123,8 @@ function renderMarkdown(text) {
       if (listType !== currentType && listBuffer.length > 0) {
         grouped.push(
           listType === "ol"
-            ? <ol key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem" }}>{listBuffer}</ol>
-            : <ul key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", listStyleType: "disc" }}>{listBuffer}</ul>
+            ? <ol key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", color: bodyColor }}>{listBuffer}</ol>
+            : <ul key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", listStyleType: "disc", color: bodyColor }}>{listBuffer}</ul>
         );
         listBuffer = [];
       }
@@ -128,8 +134,8 @@ function renderMarkdown(text) {
       if (listBuffer.length > 0) {
         grouped.push(
           listType === "ol"
-            ? <ol key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem" }}>{listBuffer}</ol>
-            : <ul key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", listStyleType: "disc" }}>{listBuffer}</ul>
+            ? <ol key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", color: bodyColor }}>{listBuffer}</ol>
+            : <ul key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", listStyleType: "disc", color: bodyColor }}>{listBuffer}</ul>
         );
         listBuffer = [];
         listType = null;
@@ -140,8 +146,8 @@ function renderMarkdown(text) {
   if (listBuffer.length > 0) {
     grouped.push(
       listType === "ol"
-        ? <ol key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem" }}>{listBuffer}</ol>
-        : <ul key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", listStyleType: "disc" }}>{listBuffer}</ul>
+        ? <ol key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", color: bodyColor }}>{listBuffer}</ol>
+        : <ul key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", listStyleType: "disc", color: bodyColor }}>{listBuffer}</ul>
     );
   }
 
@@ -186,6 +192,7 @@ export default function DeepDive() {
   const [error, setError] = useState(null);
   const [demoMode, setDemoMode] = useState(false);
   const resultsRef = useRef(null);
+  const pdfRef = useRef(null);
 
   useEffect(() => {
     const link = document.createElement("link");
@@ -234,17 +241,6 @@ export default function DeepDive() {
       setLoading(false);
       return;
     }
-  const downloadPDF = () => {
-  const element = resultsRef.current;
-  const opt = {
-    margin:       0.5,
-    filename:     'DeepDive_Report.pdf',
-    image:        { type: 'jpeg', quality: 0.98 },
-    html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#0C0B10' },
-    jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
-  };
-  html2pdf().set(opt).from(element).save();
-};  
 
     try {
       const res = await fetch("https://deepdive-api-b6ww.onrender.com/api/research", {
@@ -260,6 +256,18 @@ export default function DeepDive() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const downloadPDF = () => {
+    const element = pdfRef.current;
+    const opt = {
+      margin:       [0.75, 0.75], 
+      filename:     'DeepDive_Report.pdf',
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#FFFFFF' },
+      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+    html2pdf().set(opt).from(element).save();
   };
 
   const handleKeyDown = (e) => {
@@ -284,8 +292,6 @@ export default function DeepDive() {
       }} />
 
       <div style={{ maxWidth: "720px", margin: "0 auto", position: "relative", zIndex: 1 }}>
-
-    
 
         {/* Hero */}
         <div style={{
@@ -432,95 +438,98 @@ export default function DeepDive() {
           </div>
         )}
 
+
         {/* Results */}
         {report && !loading && (
           <div
-            ref={resultsRef}
             style={{
               marginTop: "3rem",
               marginBottom: "5rem",
               animation: "fadeUp 0.6s ease forwards",
             }}
           >
-            <div style={{
-              display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2rem",
-            }}>
+            {/* --- THE INVISIBLE PRINT DOCUMENT --- */}
+            <div style={{ position: "absolute", top: "-9999px", left: "-9999px" }}>
+              <div ref={pdfRef} style={{ width: "800px", padding: "20px", background: "#FFFFFF", fontFamily: "'DM Sans', sans-serif" }}>
+                <h1 style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: "2.2rem", color: "#111111", borderBottom: "2px solid #111111", paddingBottom: "0.5rem", marginBottom: "1.5rem" }}>
+                  Deep Dive Research Report
+                </h1>
+                {renderMarkdown(report, true)}
+              </div>
+            </div>
+            {/* ------------------------------------ */}
+
+            {/* --- YOUR EXISTING VISIBLE DARK MODE REPORT --- */}
+            <div 
+              ref={resultsRef} 
+              style={{ 
+                background: "#0C0B10",
+                padding: "1rem 0"
+              }}
+            >
               <div style={{
-                height: "1px", flex: 1,
-                background: "linear-gradient(90deg, rgba(180,160,120,0.3), transparent)",
-              }} />
-              <span style={{
-                fontFamily: "'IBM Plex Mono', monospace",
-                fontSize: "0.65rem",
-                color: "rgba(180,160,120,0.5)",
-                letterSpacing: "0.2em",
-                textTransform: "uppercase",
-                whiteSpace: "nowrap",
+                display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2rem",
               }}>
-                Report
-              </span>
+                <div style={{
+                  height: "1px", flex: 1,
+                  background: "linear-gradient(90deg, rgba(180,160,120,0.3), transparent)",
+                }} />
+                <span style={{
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  fontSize: "0.65rem",
+                  color: "rgba(180,160,120,0.5)",
+                  letterSpacing: "0.2em",
+                  textTransform: "uppercase",
+                  whiteSpace: "nowrap",
+                }}>
+                  Report
+                </span>
+                <div style={{
+                  height: "1px", flex: 1,
+                  background: "linear-gradient(270deg, rgba(180,160,120,0.3), transparent)",
+                }} />
+              </div>
+
               <div style={{
-                height: "1px", flex: 1,
-                background: "linear-gradient(270deg, rgba(180,160,120,0.3), transparent)",
-              }} />
+                background: "rgba(255,255,255,0.025)",
+                border: "1px solid rgba(255,255,255,0.07)",
+                borderRadius: "16px",
+                padding: "2.5rem",
+              }}>
+                {renderMarkdown(report)}
+              </div>
             </div>
+            {/* --- END OF REPORT --- */}
 
+            {/* BUTTONS */}
             <div style={{
-              background: "rgba(255,255,255,0.025)",
-              border: "1px solid rgba(255,255,255,0.07)",
-              borderRadius: "16px",
-              padding: "2.5rem",
-            }}>
-              {renderMarkdown(report)}
-            </div>
-
-            <div style={{
-              display: "flex", justifyContent: "flex-end", marginTop: "1.25rem",
+              display: "flex", justifyContent: "space-between", marginTop: "1.25rem",
             }}>
               <button
                 className="deep-demo-btn"
                 onClick={() => { setReport(null); setQuery(""); }}
                 style={{
                   background: "none", border: "none", cursor: "pointer",
-                  fontFamily: "'IBM Plex Mono', monospace",
-                  fontSize: "0.68rem",
-                  color: "rgba(245,240,232,0.2)",
-                  letterSpacing: "0.15em",
-                  textTransform: "uppercase",
-                  transition: "color 0.2s",
+                  fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.68rem",
+                  color: "rgba(245,240,232,0.2)", letterSpacing: "0.15em",
+                  textTransform: "uppercase", transition: "color 0.2s",
                 }}
               >
-                ← New query <div style={{
-  display: "flex", justifyContent: "space-between", marginTop: "1.25rem",
-}}>
-  <button
-    className="deep-demo-btn"
-    onClick={() => { setReport(null); setQuery(""); }}
-    style={{
-      background: "none", border: "none", cursor: "pointer",
-      fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.68rem",
-      color: "rgba(245,240,232,0.2)", letterSpacing: "0.15em",
-      textTransform: "uppercase", transition: "color 0.2s",
-    }}
-  >
-    ← New query
-  </button>
+                ← New query
+              </button>
 
-  <button
-    className="deep-btn"
-    onClick={downloadPDF}
-    style={{
-      background: "rgba(180,160,120,0.1)", border: "1px solid rgba(180,160,120,0.4)",
-      borderRadius: "6px", padding: "0.4rem 1rem", cursor: "pointer",
-      fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.68rem",
-      color: "rgba(180,160,120,0.9)", letterSpacing: "0.1em",
-      textTransform: "uppercase", transition: "all 0.2s",
-    }}
-  >
-    ↓ Download PDF
-  </button>
-</div>
-                
+              <button
+                className="deep-btn"
+                onClick={downloadPDF}
+                style={{
+                  background: "rgba(180,160,120,0.1)", border: "1px solid rgba(180,160,120,0.4)",
+                  borderRadius: "6px", padding: "0.4rem 1rem", cursor: "pointer",
+                  fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.68rem",
+                  color: "rgba(180,160,120,0.9)", letterSpacing: "0.1em",
+                  textTransform: "uppercase", transition: "all 0.2s",
+                }}
+              >
+                ↓ Download PDF
               </button>
             </div>
           </div>

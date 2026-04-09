@@ -1,15 +1,10 @@
-"""
-DeepDive - Autonomous Research Agent
-Refactored for backend deployment (FastAPI / production use).
-Provides a clean interface: run_research(query) -> str
-"""
-
 import os
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TypedDict
 from dotenv import load_dotenv
 
 # LangGraph imports
-from langgraph.graph import StateGraph, END
+from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import MemorySaver
 
 # LangChain imports
 from langchain_groq import ChatGroq
@@ -21,13 +16,12 @@ try:
 except ImportError:
     from langchain_community.tools import TavilySearchResults
 
-# Load environment variables (API keys)
 load_dotenv()
 
 # ----------------------------------------------------------------------
-# 1. Define Agent State (TypedDict)
+# 1. Define Agent State (TypedDict is crucial for LangGraph memory)
 # ----------------------------------------------------------------------
-class AgentState(Dict[str, Any]):
+class AgentState(TypedDict, total=False):
     """State schema for the LangGraph agent."""
     task: str
     plan: str
@@ -38,20 +32,16 @@ class AgentState(Dict[str, Any]):
     max_revisions: int
 
 # ----------------------------------------------------------------------
-# 2. Global Agent Initialization (cached for production)
+# 2. Global Agent Initialization with Memory
 # ----------------------------------------------------------------------
 _AGENT_GRAPH = None
+_MEMORY = MemorySaver() # Initializes the local checkpointer
 
 def _build_agent_graph() -> StateGraph:
-    """
-    Builds and compiles the LangGraph agent.
-    Returns a compiled graph that can be invoked.
-    """
-    # Initialize LLM and search tool
     llm = ChatGroq(
         model="llama-3.3-70b-versatile",
         temperature=0,
-        api_key=os.getenv("GROQ_API_KEY")  # explicit for safety
+        api_key=os.getenv("GROQ_API_KEY")
     )
     search_tool = TavilySearchResults(
         max_results=5,
@@ -69,18 +59,17 @@ def _build_agent_graph() -> StateGraph:
             2. Identify key entities (companies, laws, technologies).
             3. Return ONLY the 3 search queries, separated by newlines.
             """),
-            HumanMessage(content=state['task'])
+            HumanMessage(content=state.get('task', ''))
         ]
         response = llm.invoke(messages)
         return {"plan": response.content}
 
     # ---- Node: Researcher ----
     def researcher_node(state: AgentState) -> Dict[str, Any]:
-        # Parse plan into individual queries
-        queries = [q.strip() for q in state['plan'].split('\n') if q.strip()]
+        queries = [q.strip() for q in state.get('plan', '').split('\n') if q.strip()]
         combined_content = []
 
-        for q in queries[:3]:  # limit to first 3
+        for q in queries[:3]:  
             try:
                 results = search_tool.invoke(q)
                 for res in results:
@@ -88,7 +77,6 @@ def _build_agent_graph() -> StateGraph:
                         f"Source: {res['url']}\nContent: {res['content']}\n"
                     )
             except Exception:
-                # Silently skip failed searches in production
                 continue
 
         return {"content": combined_content}
@@ -104,96 +92,82 @@ def _build_agent_graph() -> StateGraph:
         3. Do not invent information. If the research is missing, state "Data not found."
         4. Format with H2 Headers (##) and Bullet points.
         
-        USER REQUEST: {state['task']}
+        USER REQUEST: {state.get('task', '')}
         
         RESEARCH DATA:
-        {state['content']}
+        {state.get('content', [])}
         """
         response = llm.invoke([HumanMessage(content=prompt)])
         return {"draft": response.content}
+
+    # ---- NEW Node: Refiner (For Iterative Chat) ----
+    def refiner_node(state: AgentState) -> Dict[str, Any]:
+        prompt = f"""
+        You are a Data-Driven Technical Writer and Research Assistant.
+        
+        ORIGINAL REPORT YOU JUST WROTE:
+        {state.get('draft', '')}
+        
+        USER FOLLOW-UP REQUEST:
+        {state.get('task', '')}
+        
+        Instructions:
+        1. If the user asks to rewrite, adjust, or expand a specific part of the report, rewrite the report accommodating their request while maintaining the professional Markdown formatting.
+        2. If the user asks a specific question about the data in the report, answer it directly below the report or adjust the report to clarify.
+        3. Do not lose any crucial citations from the original report.
+        """
+        response = llm.invoke([HumanMessage(content=prompt)])
+        return {"draft": response.content}
+
+    # ---- Conditional Router ----
+    def route_node(state: AgentState) -> str:
+        # If a draft already exists in memory, route to the refiner instead of researching again
+        if state.get("draft"):
+            return "refiner"
+        return "planner"
 
     # ---- Build graph ----
     builder = StateGraph(AgentState)
     builder.add_node("planner", planner_node)
     builder.add_node("researcher", researcher_node)
     builder.add_node("writer", writer_node)
+    builder.add_node("refiner", refiner_node)
 
-    builder.set_entry_point("planner")
+    # Use the conditional edge at the start
+    builder.add_conditional_edges(START, route_node)
     builder.add_edge("planner", "researcher")
     builder.add_edge("researcher", "writer")
     builder.add_edge("writer", END)
+    builder.add_edge("refiner", END)
 
-    return builder.compile()
+    # Attach the Memory Checkpointer here!
+    return builder.compile(checkpointer=_MEMORY)
 
 
 def get_agent():
-    """
-    Returns a singleton instance of the compiled LangGraph agent.
-    Caches the graph to avoid rebuilding on every request.
-    """
     global _AGENT_GRAPH
     if _AGENT_GRAPH is None:
         _AGENT_GRAPH = _build_agent_graph()
     return _AGENT_GRAPH
 
-
 # ----------------------------------------------------------------------
 # 3. Public API Function for Backend
 # ----------------------------------------------------------------------
-def run_research(task: str, max_revisions: int = 2) -> str:
+def run_research(task: str, thread_id: str = "default_thread", max_revisions: int = 2) -> str:
     """
-    Execute the DeepDive research agent on a given task.
-
-    Parameters
-    ----------
-    task : str
-        The research question or topic (e.g., "What is the projected global market size of Generative AI in healthcare by 2026?").
-    max_revisions : int, optional
-        Maximum number of revision cycles (currently not used in linear flow, but kept for API consistency).
-
-    Returns
-    -------
-    str
-        A fully cited, markdown-formatted research report.
-
-    Raises
-    ------
-    ValueError
-        If the input task is empty or not a string.
-    RuntimeError
-        If the agent execution fails unexpectedly.
+    Executes the research agent. Now supports thread_id for conversation memory.
     """
-    # Input validation
     if not isinstance(task, str) or not task.strip():
         raise ValueError("Task must be a non-empty string.")
 
-    # Prepare initial state
-    initial_state: AgentState = {
-        "task": task,
-        "plan": "",
-        "draft": "",
-        "critique": "",
-        "content": [],
-        "revision_number": 0,
-        "max_revisions": max_revisions
-    }
-
     try:
         agent = get_agent()
-        final_state = agent.invoke(initial_state)
-        return final_state["draft"]
+        
+        # This config tells LangGraph which memory compartment to open
+        config = {"configurable": {"thread_id": thread_id}}
+        
+        # We only pass the updated task. LangGraph automatically merges this with the saved state!
+        final_state = agent.invoke({"task": task}, config=config)
+        return final_state.get("draft", "Error: No draft generated.")
     except Exception as e:
         raise RuntimeError(f"Research agent failed: {str(e)}") from e
-
-
-# ----------------------------------------------------------------------
-# Optional: Simple test if script is run directly (not for production)
-# ----------------------------------------------------------------------
-if __name__ == "__main__":
-    # Example usage (won't run when imported)
-    test_query = "What is the projected global market size of Generative AI in healthcare by 2026? Include top 3 companies."
-    try:
-        report = run_research(test_query)
-        print(report)
-    except Exception as e:
-        print(f"Error: {e}")
