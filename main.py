@@ -1,46 +1,39 @@
-import os
-from dotenv import load_dotenv
-from langchain_groq import ChatGroq
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from agent import run_research  # Importing your clean function from agent.py
 
-# --- ROBUST IMPORT BLOCK ---
-# We try the new way first, then fall back to the standard community way.
-try:
-    from langchain_tavily import TavilySearchResults
-except ImportError:
-    from langchain_community.tools import TavilySearchResults
-# ---------------------------
+# Initialize the FastAPI app
+app = FastAPI(title="Deep Dive API", version="1.0")
 
-# 1. Load Secrets
-load_dotenv()
+# Setup CORS (CRITICAL: This allows your frontend to talk to your backend)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # For production, change this to your Vercel/Netlify URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# 2. Setup Tools
-# Tavily will search the web for us
-search_tool = TavilySearchResults(max_results=3)
+# Define the data structure we expect from the frontend
+class ResearchRequest(BaseModel):
+    query: str
 
-# 3. Setup LLM (The Brain)
-# Using the latest Llama 3.3 model on Groq
-llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+class ResearchResponse(BaseModel):
+    report: str
 
-# 4. Simple Test Function
-def run_simple_search(query):
-    print(f"🔎 Searching for: {query}...")
-    
+# Create the API Endpoint
+@app.post("/api/research", response_model=ResearchResponse)
+async def generate_research_report(request: ResearchRequest):
     try:
-        # Execute search
-        results = search_tool.invoke(query)
-        
-        print("\n✅ Raw Search Results:")
-        for result in results:
-            print(f"- {result['url']}: {result['content'][:100]}...")
-
-        # Ask LLM to summarize
-        print("\n🤖 AI Summary:")
-        # We pass the search results explicitly to the LLM
-        response = llm.invoke(f"Summarize these search results for the user query '{query}': {results}")
-        print(response.content)
-        
+        # Call the DeepSeek-refactored logic
+        markdown_report = run_research(request.query)
+        return ResearchResponse(report=markdown_report)
     except Exception as e:
-        print(f"\n❌ Error during execution: {e}")
+        # If something goes wrong, send a 500 error to the frontend
+        raise HTTPException(status_code=500, detail=str(e))
 
-if __name__ == "__main__":
-    run_simple_search("What is the latest advancement in Solid State Batteries 2025?")
+# Simple health check endpoint to make sure the server is awake
+@app.get("/health")
+async def health_check():
+    return {"status": "Active", "agent": "Deep Dive Ready"}
