@@ -235,7 +235,7 @@ export default function DeepDive() {
     }
 
     try {
-      const res = await fetch("http://localhost:8000/api/research", {
+      const res = await fetch("https://deepdive-api-b6ww.onrender.com/api/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: query.trim() }),
