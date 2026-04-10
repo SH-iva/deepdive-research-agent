@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import html2pdf from "html2pdf.js";
 import { SignedIn, SignedOut, SignIn, UserButton, useUser, useSession } from "@clerk/clerk-react";
 import { supabaseClient } from "./supabase";
+import { Analytics } from "@vercel/analytics/react";
 
 function renderMarkdown(text, isPrint = false) {
   const textColor = isPrint ? "#111111" : "#F5F0E8";
@@ -411,6 +412,7 @@ export default function DeepDive() {
           </div>
         </div>
       </SignedIn>
+      <Analytics />
     </div>
   );
 }
