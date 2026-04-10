@@ -1,20 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import html2pdf from "html2pdf.js";
-import { SignedIn, SignedOut, SignIn, UserButton, useUser } from "@clerk/clerk-react";
-import { supabase } from "./supabase";
+import { SignedIn, SignedOut, SignIn, UserButton, useUser, useSession } from "@clerk/clerk-react";
+import { supabaseClient } from "./supabase";
 
 function renderMarkdown(text, isPrint = false) {
   const textColor = isPrint ? "#111111" : "#F5F0E8";
   const bodyColor = isPrint ? "#333333" : "rgba(245,240,232,0.7)";
   const borderColor = isPrint ? "#E2E8F0" : "rgba(255,255,255,0.08)";
-
   const lines = text.split("\n");
   const elements = [];
   let key = 0;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-
     if (line.startsWith("## ")) {
       elements.push(
         <h2 key={key++} style={{
@@ -30,19 +28,13 @@ function renderMarkdown(text, isPrint = false) {
       const content = line.replace("- ", "");
       const parts = content.split(/\*\*(.*?)\*\*/g);
       elements.push(
-        <li key={key++} style={{
-          fontSize: "0.9rem", color: bodyColor, lineHeight: 1.8,
-          marginBottom: "0.4rem", paddingLeft: "0.25rem",
-        }}>
+        <li key={key++} style={{ fontSize: "0.9rem", color: bodyColor, lineHeight: 1.8, marginBottom: "0.4rem", paddingLeft: "0.25rem" }}>
           {parts.map((p, idx) => idx % 2 === 1 ? <strong key={idx} style={{ color: textColor, fontWeight: 500 }}>{p}</strong> : p )}
         </li>
       );
     } else if (/^\d+\./.test(line)) {
       elements.push(
-        <li key={key++} style={{
-          fontSize: "0.9rem", color: bodyColor, lineHeight: 1.8,
-          marginBottom: "0.4rem", paddingLeft: "0.25rem", listStyleType: "decimal",
-        }}>
+        <li key={key++} style={{ fontSize: "0.9rem", color: bodyColor, lineHeight: 1.8, marginBottom: "0.4rem", paddingLeft: "0.25rem", listStyleType: "decimal" }}>
           {line.replace(/^\d+\.\s/, "")}
         </li>
       );
@@ -51,9 +43,7 @@ function renderMarkdown(text, isPrint = false) {
     } else {
       const parts = line.split(/\*\*(.*?)\*\*/g);
       elements.push(
-        <p key={key++} style={{
-          fontSize: "0.9rem", color: bodyColor, lineHeight: 1.85, marginBottom: "0.25rem",
-        }}>
+        <p key={key++} style={{ fontSize: "0.9rem", color: bodyColor, lineHeight: 1.85, marginBottom: "0.25rem" }}>
           {parts.map((p, idx) => idx % 2 === 1 ? <strong key={idx} style={{ color: textColor, fontWeight: 500 }}>{p}</strong> : p )}
         </p>
       );
@@ -69,22 +59,14 @@ function renderMarkdown(text, isPrint = false) {
       const isOrdered = el.props.style?.listStyleType === "decimal";
       const currentType = isOrdered ? "ol" : "ul";
       if (listType !== currentType && listBuffer.length > 0) {
-        grouped.push(
-          listType === "ol"
-            ? <ol key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", color: bodyColor }}>{listBuffer}</ol>
-            : <ul key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", listStyleType: "disc", color: bodyColor }}>{listBuffer}</ul>
-        );
+        grouped.push(listType === "ol" ? <ol key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", color: bodyColor }}>{listBuffer}</ol> : <ul key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", listStyleType: "disc", color: bodyColor }}>{listBuffer}</ul>);
         listBuffer = [];
       }
       listType = currentType;
       listBuffer.push(el);
     } else {
       if (listBuffer.length > 0) {
-        grouped.push(
-          listType === "ol"
-            ? <ol key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", color: bodyColor }}>{listBuffer}</ol>
-            : <ul key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", listStyleType: "disc", color: bodyColor }}>{listBuffer}</ul>
-        );
+        grouped.push(listType === "ol" ? <ol key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", color: bodyColor }}>{listBuffer}</ol> : <ul key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", listStyleType: "disc", color: bodyColor }}>{listBuffer}</ul>);
         listBuffer = [];
         listType = null;
       }
@@ -92,13 +74,8 @@ function renderMarkdown(text, isPrint = false) {
     }
   }
   if (listBuffer.length > 0) {
-    grouped.push(
-      listType === "ol"
-        ? <ol key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", color: bodyColor }}>{listBuffer}</ol>
-        : <ul key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", listStyleType: "disc", color: bodyColor }}>{listBuffer}</ul>
-    );
+    grouped.push(listType === "ol" ? <ol key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", color: bodyColor }}>{listBuffer}</ol> : <ul key={key++} style={{ paddingLeft: "1.25rem", margin: "0.25rem 0 0.75rem", listStyleType: "disc", color: bodyColor }}>{listBuffer}</ul>);
   }
-
   return grouped;
 }
 
@@ -116,7 +93,9 @@ function WaveLoader({ text = "Agent running · sourcing · synthesizing" }) {
 }
 
 export default function DeepDive() {
-  const { user } = useUser(); // Gets the logged-in user from Clerk
+  const { user } = useUser(); 
+  const { session } = useSession(); // NEW: The Session holds the secure token
+
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState(null);
@@ -126,29 +105,35 @@ export default function DeepDive() {
   const [followUp, setFollowUp] = useState("");
   const [isRefining, setIsRefining] = useState(false);
 
-  // History Sidebar State
   const [history, setHistory] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const resultsRef = useRef(null);
   const pdfRef = useRef(null);
 
-  // Fetch History on Load
+  // Fetch History with Secure Token
   useEffect(() => {
-    if (user) {
+    if (user && session) {
       fetchHistory();
     }
-  }, [user]);
+  }, [user, session]);
 
   const fetchHistory = async () => {
-    const { data, error } = await supabase
-      .from('reports')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-    
-    if (data) setHistory(data);
-    if (error) console.error("Error fetching history:", error);
+    try {
+      const token = await session.getToken({ template: "supabase" });
+      const supabase = await supabaseClient(token);
+      
+      const { data, error } = await supabase
+        .from('reports')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (data) setHistory(data);
+      if (error) console.error("Error fetching history:", error);
+    } catch (err) {
+      console.error("Auth error:", err);
+    }
   };
 
   useEffect(() => {
@@ -188,15 +173,18 @@ export default function DeepDive() {
       const data = await res.json();
       setReport(data.report);
 
-      // Save to Supabase
-      if (user) {
+      // Save to Supabase with Secure Token
+      if (user && session) {
+        const token = await session.getToken({ template: "supabase" });
+        const supabase = await supabaseClient(token);
+        
         await supabase.from('reports').insert([{
           user_id: user.id,
           thread_id: newThreadId,
           query: query.trim(),
           report_text: data.report
         }]);
-        fetchHistory(); // Refresh the sidebar
+        fetchHistory(); 
       }
     } catch (err) {
       setError(err.message || "Connection failed.");
@@ -220,8 +208,11 @@ export default function DeepDive() {
       setReport(data.report);
       setFollowUp("");
 
-      // Update the existing report in Supabase
-      if (user) {
+      // Update Supabase with Secure Token
+      if (user && session) {
+        const token = await session.getToken({ template: "supabase" });
+        const supabase = await supabaseClient(token);
+
         await supabase.from('reports')
           .update({ report_text: data.report })
           .eq('thread_id', threadId);
@@ -238,7 +229,7 @@ export default function DeepDive() {
     setQuery(pastReport.query);
     setReport(pastReport.report_text);
     setThreadId(pastReport.thread_id);
-    setIsSidebarOpen(false); // Close sidebar on mobile
+    setIsSidebarOpen(false); 
   };
 
   const downloadPDF = () => {
@@ -289,7 +280,6 @@ export default function DeepDive() {
         {/* --- MAIN CONTENT AREA --- */}
         <div style={{ padding: "0 1.5rem", transition: "margin-left 0.3s ease", marginLeft: isSidebarOpen ? "300px" : "0" }}>
           
-          {/* Top Nav (Hamburger + Profile) */}
           <div style={{ position: "absolute", top: "1.5rem", left: "1.5rem", right: "2rem", display: "flex", justifyContent: "space-between", zIndex: 10 }}>
             <button onClick={() => setIsSidebarOpen(true)} style={{ background: "none", border: "none", color: "rgba(180,160,120,0.9)", cursor: "pointer", fontSize: "1.5rem", padding: "0" }}>
               ☰
