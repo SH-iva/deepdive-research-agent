@@ -6,10 +6,13 @@ from agent import run_research
 # Initialize the FastAPI app
 app = FastAPI(title="Deep Dive API", version="1.0")
 
-# Setup CORS
+# Setup CORS (Secured for Production)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
+    allow_origins=[
+        "http://localhost:5173", # Allows your local computer to test
+        "https://deepdive-research-agent.vercel.app" # Allows your live Vercel site
+    ],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
