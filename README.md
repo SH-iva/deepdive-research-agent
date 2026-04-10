@@ -25,7 +25,9 @@ DeepDive is built on a decoupled microservices architecture:
 
 ## 📂 Repository Structure (Monorepo)
 
-\`\`\`text
+## 📂 Repository Structure (Monorepo)
+
+```text
 .
 ├── deepdive-frontend/       # React application (Vite)
 │   ├── src/
@@ -35,7 +37,6 @@ DeepDive is built on a decoupled microservices architecture:
 ├── agent.py                 # LangGraph state machine and Nodes
 ├── main.py                  # FastAPI server and CORS security config
 └── requirements.txt         # Backend Python dependencies
-\`\`\`
 
 ## 🚀 Local Deployment
 
