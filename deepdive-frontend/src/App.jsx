@@ -2,10 +2,25 @@ import { useState, useEffect, useRef } from "react";
 import html2pdf from "html2pdf.js";
 import { SignedIn, SignedOut, SignIn, UserButton, useUser, useSession } from "@clerk/clerk-react";
 import { supabaseClient } from "./supabase";
+import { parseInline } from "./parseInline";
+
+const API_URL =
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.DEV ? "http://localhost:8000" : "https://deepdive-api-b6ww.onrender.com");
+
+// Renders **bold** and [source](url) citations; links open safely in a new tab.
+function renderInline(text, textColor, linkColor) {
+  return parseInline(text).map((t, i) => {
+    if (t.type === "bold") return <strong key={i} style={{ color: textColor, fontWeight: 500 }}>{t.value}</strong>;
+    if (t.type === "link") return <a key={i} href={t.href} target="_blank" rel="noopener noreferrer" style={{ color: linkColor, textDecoration: "underline" }}>{t.value}</a>;
+    return t.value;
+  });
+}
 
 function renderMarkdown(text, isPrint = false) {
   const textColor = isPrint ? "#111111" : "#F5F0E8";
   const bodyColor = isPrint ? "#333333" : "rgba(245,240,232,0.7)";
+  const linkColor = isPrint ? "#1D4ED8" : "rgba(180,160,120,1)";
   const borderColor = isPrint ? "#E2E8F0" : "rgba(255,255,255,0.08)";
   const lines = text.split("\n");
   const elements = [];
@@ -26,25 +41,23 @@ function renderMarkdown(text, isPrint = false) {
       );
     } else if (line.startsWith("- ")) {
       const content = line.replace("- ", "");
-      const parts = content.split(/\*\*(.*?)\*\*/g);
       elements.push(
         <li key={key++} style={{ fontSize: "0.9rem", color: bodyColor, lineHeight: 1.8, marginBottom: "0.4rem", paddingLeft: "0.25rem" }}>
-          {parts.map((p, idx) => idx % 2 === 1 ? <strong key={idx} style={{ color: textColor, fontWeight: 500 }}>{p}</strong> : p )}
+          {renderInline(content, textColor, linkColor)}
         </li>
       );
     } else if (/^\d+\./.test(line)) {
       elements.push(
         <li key={key++} style={{ fontSize: "0.9rem", color: bodyColor, lineHeight: 1.8, marginBottom: "0.4rem", paddingLeft: "0.25rem", listStyleType: "decimal" }}>
-          {line.replace(/^\d+\.\s/, "")}
+          {renderInline(line.replace(/^\d+\.\s/, ""), textColor, linkColor)}
         </li>
       );
     } else if (line.trim() === "") {
       elements.push(<div key={key++} style={{ height: "0.5rem" }} />);
     } else {
-      const parts = line.split(/\*\*(.*?)\*\*/g);
       elements.push(
         <p key={key++} style={{ fontSize: "0.9rem", color: bodyColor, lineHeight: 1.85, marginBottom: "0.25rem" }}>
-          {parts.map((p, idx) => idx % 2 === 1 ? <strong key={idx} style={{ color: textColor, fontWeight: 500 }}>{p}</strong> : p )}
+          {renderInline(line, textColor, linkColor)}
         </p>
       );
     }
@@ -188,7 +201,7 @@ export default function DeepDive() {
     setThreadId(newThreadId);
 
     try {
-      const res = await fetch("https://deepdive-api-b6ww.onrender.com/api/research", {
+      const res = await fetch(`${API_URL}/api/research`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: query.trim(), thread_id: newThreadId }),
@@ -221,7 +234,7 @@ export default function DeepDive() {
     setIsRefining(true); setError(null);
 
     try {
-      const res = await fetch("https://deepdive-api-b6ww.onrender.com/api/research", {
+      const res = await fetch(`${API_URL}/api/research`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: followUp.trim(), thread_id: threadId }),
