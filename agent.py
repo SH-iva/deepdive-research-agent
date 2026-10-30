@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Any, Optional, TypedDict
+from typing import List, Dict, Any, TypedDict
 from dotenv import load_dotenv
 
 # LangGraph imports
@@ -26,10 +26,7 @@ class AgentState(TypedDict, total=False):
     task: str
     plan: str
     draft: str
-    critique: str
     content: List[str]
-    revision_number: int
-    max_revisions: int
 
 # ----------------------------------------------------------------------
 # 2. Global Agent Initialization with Memory
@@ -153,9 +150,9 @@ def get_agent():
 # ----------------------------------------------------------------------
 # 3. Public API Function for Backend
 # ----------------------------------------------------------------------
-def run_research(task: str, thread_id: str = "default_thread", max_revisions: int = 2) -> str:
+def run_research(task: str, thread_id: str) -> str:
     """
-    Executes the research agent. Now supports thread_id for conversation memory.
+    Executes the research agent. thread_id selects the conversation memory.
     """
     if not isinstance(task, str) or not task.strip():
         raise ValueError("Task must be a non-empty string.")
