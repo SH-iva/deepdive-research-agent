@@ -1,6 +1,7 @@
 import streamlit as st
 import time
-from agent import graph  # Import your existing brain
+import uuid
+from agent import get_agent
 
 # --- PAGE CONFIGURATION (Must be first) ---
 st.set_page_config(
@@ -110,7 +111,10 @@ if st.button("🚀 Start Deep Research", type="primary", use_container_width=Tru
             # RUN THE GRAPH
             # We catch the output to display later
             try:
-                result = graph.invoke(initial_state)
+                result = get_agent().invoke(
+                    initial_state,
+                    config={"configurable": {"thread_id": st.session_state.setdefault("thread_id", str(uuid.uuid4()))}}
+                )
                 
                 st.write("🕵️ **Researcher Node:** Browsing the web for 2026 data...")
                 # Show found sources in an expander for "Proof of Work"

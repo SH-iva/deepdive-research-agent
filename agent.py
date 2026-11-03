@@ -39,14 +39,40 @@ _MEMORY = MemorySaver() # Initializes the local checkpointer
 
 def _build_agent_graph() -> StateGraph:
     llm = ChatGroq(
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         temperature=0,
         api_key=os.getenv("GROQ_API_KEY")
     )
+    # Keep search volume bounded so the writer stays within Groq's TPM limit.
     search_tool = TavilySearchResults(
-        max_results=5,
+        max_results=3,
         api_key=os.getenv("TAVILY_API_KEY")
     )
+
+    MAX_SOURCES = 6
+    MAX_SOURCE_CHARS = 900
+    MAX_TOTAL_RESEARCH_CHARS = 6000
+
+    def _compact_research(results: List[Dict[str, Any]], remaining_chars: int) -> List[str]:
+        """Keep source URLs and concise excerpts while bounding prompt size."""
+        compacted = []
+        for res in results:
+            if len(compacted) >= MAX_SOURCES or remaining_chars <= 0:
+                break
+            url = str(res.get("url", "")).strip()
+            body = str(res.get("content", "")).strip()
+            if not body:
+                continue
+            excerpt_budget = min(MAX_SOURCE_CHARS, max(0, remaining_chars - len(url) - 30))
+            if excerpt_budget <= 0:
+                break
+            excerpt = body[:excerpt_budget]
+            if len(body) > excerpt_budget:
+                excerpt = excerpt.rsplit(" ", 1)[0] + "…"
+            item = f"Source: {url}\\nContent: {excerpt}"
+            compacted.append(item)
+            remaining_chars -= len(item)
+        return compacted
 
     # ---- Node: Planner ----
     def planner_node(state: AgentState) -> Dict[str, Any]:
@@ -68,15 +94,18 @@ def _build_agent_graph() -> StateGraph:
     def researcher_node(state: AgentState) -> Dict[str, Any]:
         queries = [q.strip() for q in state.get('plan', '').split('\n') if q.strip()]
         combined_content = []
+        remaining_chars = MAX_TOTAL_RESEARCH_CHARS
 
-        for q in queries[:3]:  
+        for q in queries[:3]:
+            if len(combined_content) >= MAX_SOURCES or remaining_chars <= 0:
+                break
             try:
                 results = search_tool.invoke(q)
-                for res in results:
-                    combined_content.append(
-                        f"Source: {res['url']}\nContent: {res['content']}\n"
-                    )
+                compacted = _compact_research(results[:MAX_SOURCES - len(combined_content)], remaining_chars)
+                combined_content.extend(compacted)
+                remaining_chars -= sum(len(item) for item in compacted)
             except Exception:
+                # Continue with other queries if one search fails.
                 continue
 
         return {"content": combined_content}
@@ -94,8 +123,8 @@ def _build_agent_graph() -> StateGraph:
         
         USER REQUEST: {state.get('task', '')}
         
-        RESEARCH DATA:
-        {state.get('content', [])}
+        RESEARCH DATA (concise excerpts; cite only these URLs):
+        {chr(10).join(state.get('content', []))}
         """
         response = llm.invoke([HumanMessage(content=prompt)])
         return {"draft": response.content}

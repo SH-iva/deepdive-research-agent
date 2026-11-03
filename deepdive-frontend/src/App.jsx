@@ -3,6 +3,18 @@ import html2pdf from "html2pdf.js";
 import { SignedIn, SignedOut, SignIn, UserButton, useUser, useSession } from "@clerk/clerk-react";
 import { supabaseClient } from "./supabase";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+async function getApiHeaders(session) {
+  if (!session) throw new Error("Your session has expired. Please sign in again.");
+  const token = await session.getToken();
+  if (!token) throw new Error("Unable to obtain an API authentication token.");
+  return {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${token}`,
+  };
+}
+
 function renderMarkdown(text, isPrint = false) {
   const textColor = isPrint ? "#111111" : "#F5F0E8";
   const bodyColor = isPrint ? "#333333" : "rgba(245,240,232,0.7)";
@@ -122,7 +134,7 @@ export default function DeepDive() {
 
   const fetchHistory = async () => {
     try {
-      const token = await session.getToken({ template: "supabase" });
+      const token = await session.getToken();
       const supabase = await supabaseClient(token);
       
       const { data, error } = await supabase
@@ -147,10 +159,10 @@ export default function DeepDive() {
     
     if (user && session) {
       try {
-        const token = await session.getToken({ template: "supabase" });
+        const token = await session.getToken();
         const supabase = await supabaseClient(token);
         
-        const { error } = await supabase.from('reports').delete().eq('id', id);
+        const { error } = await supabase.from('reports').delete().eq('id', id).eq('user_id', user.id);
         if (error) throw error;
       } catch (err) {
         console.error("Failed to delete from DB:", err);
@@ -188,9 +200,9 @@ export default function DeepDive() {
     setThreadId(newThreadId);
 
     try {
-      const res = await fetch("https://deepdive-api-b6ww.onrender.com/api/research", {
+      const res = await fetch(`${API_BASE_URL}/api/research`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await getApiHeaders(session),
         body: JSON.stringify({ query: query.trim(), thread_id: newThreadId }),
       });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
@@ -198,15 +210,16 @@ export default function DeepDive() {
       setReport(data.report);
 
       if (user && session) {
-        const token = await session.getToken({ template: "supabase" });
+        const token = await session.getToken();
         const supabase = await supabaseClient(token);
         
-        await supabase.from('reports').insert([{
+        const { error: saveError } = await supabase.from('reports').insert([{
           user_id: user.id,
           thread_id: newThreadId,
           query: query.trim(),
           report_text: data.report
         }]);
+        if (saveError) throw new Error(`Report generated, but history could not be saved: ${saveError.message}`);
         fetchHistory(); 
       }
     } catch (err) {
@@ -221,9 +234,9 @@ export default function DeepDive() {
     setIsRefining(true); setError(null);
 
     try {
-      const res = await fetch("https://deepdive-api-b6ww.onrender.com/api/research", {
+      const res = await fetch(`${API_BASE_URL}/api/research`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await getApiHeaders(session),
         body: JSON.stringify({ query: followUp.trim(), thread_id: threadId }),
       });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
@@ -232,12 +245,14 @@ export default function DeepDive() {
       setFollowUp("");
 
       if (user && session) {
-        const token = await session.getToken({ template: "supabase" });
+        const token = await session.getToken();
         const supabase = await supabaseClient(token);
 
-        await supabase.from('reports')
+        const { error: updateError } = await supabase.from('reports')
           .update({ report_text: data.report })
-          .eq('thread_id', threadId);
+          .eq('thread_id', threadId)
+          .eq('user_id', user.id);
+        if (updateError) throw new Error(`Report refined, but history could not be updated: ${updateError.message}`);
         fetchHistory();
       }
     } catch (err) {

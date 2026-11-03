@@ -1,2 +1,29 @@
 .env
 venv/
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Frontend dependencies and builds
+node_modules/
+dist/
+build/
+
+# Editor and OS files
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local backups and agent-specific files
+.env*
+!.env.example
+.agents/
+skills-lock.json
