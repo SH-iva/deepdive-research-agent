@@ -76,3 +76,69 @@
   * **API Protection:** FastAPI CORS middleware restricts traffic exclusively to the production Vercel domain.
   * **Data Isolation:** Supabase RLS is enabled. Database queries require a valid Clerk JWT matching the row's `user_id`.
   * **State Management:** Thread IDs are generated client-side and passed securely to the LangGraph memory checkpointer to prevent session bleeding.
+
+
+## Authentication and secure deployment
+
+### Backend environment
+
+Copy `.env.example` to `.env` and configure fresh values (never commit secrets):
+
+- `GROQ_API_KEY` and `TAVILY_API_KEY`
+- `CLERK_JWKS_URL`: the JWKS endpoint from your Clerk instance, usually
+  `https://<your-clerk-domain>/.well-known/jwks.json`
+- `CLERK_ISSUER_URL`: the exact `iss` value in a Clerk session JWT
+- `CORS_ALLOWED_ORIGINS`: comma-separated frontend origins
+
+The research endpoint requires `Authorization: Bearer <Clerk session JWT>`.
+The API verifies the JWT signature against Clerk's JWKS and validates `exp`,
+`iat`, and `sub`. LangGraph thread IDs are namespaced with the verified Clerk
+subject so users cannot share agent memory by choosing the same client thread ID.
+
+### Frontend environment
+
+Copy `deepdive-frontend/.env.example` to `deepdive-frontend/.env.local`.
+Set the Clerk publishable key, Supabase URL and anon key, and the deployed API
+base URL. The frontend sends a Clerk session JWT to FastAPI and the Clerk
+`supabase` JWT template to Supabase.
+
+### Supabase / Clerk setup
+
+1. Configure Supabase Third-Party Auth to trust your Clerk instance.
+2. In Clerk, configure the `supabase` JWT template so its `sub` is the Clerk
+   user ID and its `role` is `authenticated` (and its audience matches your
+   Supabase setup).
+3. Run `supabase/migrations/202611030001_reports_rls.sql` in the Supabase SQL
+   editor or through your migration workflow.
+4. Confirm the `reports` table has RLS enabled and test access with two distinct
+   Clerk users. Do not disable RLS.
+5. Set `CLERK_JWKS_URL`, `CLERK_ISSUER_URL`, and `CORS_ALLOWED_ORIGINS` in the
+   backend hosting provider. Set `VITE_API_BASE_URL` in the frontend hosting
+   provider and rebuild the frontend.
+
+### Local development
+
+Backend:
+
+```bash
+python -m pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+
+Frontend:
+
+```bash
+cd deepdive-frontend
+npm ci
+npm run dev
+```
+
+### Security tests
+
+Run the API authorization regression tests after installing backend dependencies:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The API health endpoint is public. `/api/research` requires a valid Clerk JWT.

@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.61.4",
+    "@clerk/react": "^6.18.4",
     "@supabase/supabase-js": "^2.103.0",
     "@tailwindcss/vite": "^4.2.2",
     "html2pdf.js": "^0.14.0",
