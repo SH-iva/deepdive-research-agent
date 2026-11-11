@@ -1,8 +1,9 @@
-export default function RunPanel({ steps, open, active, finished }) {
+// Progress steps plus a shimmering skeleton while a report is being written.
+export default function RunPanel({ steps, open, active }) {
   return (
-    <div className={`run ${open ? 'open' : ''}`}>
+    <div className={`run ${open ? 'open' : ''}`} aria-live="polite">
       <div className="run-in">
-        <div className={`runcard ${finished ? 'finished' : ''}`}>
+        <div className="runcard">
           <ol className="steps">
             {steps.map((s, i) => (
               <li key={s} className={i < active ? 'done' : i === active ? 'on' : ''}>
@@ -11,16 +12,11 @@ export default function RunPanel({ steps, open, active, finished }) {
               </li>
             ))}
           </ol>
-          <div className="swap">
-            <div className="rskel" aria-hidden="true">
-              <div className="sk" style={{ width: '48%', height: 20 }} />
-              <div className="sk" style={{ width: '100%' }} />
-              <div className="sk" style={{ width: '92%' }} />
-              <div className="sk" style={{ width: '64%' }} />
-            </div>
-            <p className="rdone">
-              Preview complete. In the live app, your report opens here with every figure linked to its source.
-            </p>
+          <div style={{ marginTop: 18 }} aria-hidden="true">
+            <div className="sk" style={{ width: '48%', height: 20 }} />
+            <div className="sk" style={{ width: '100%' }} />
+            <div className="sk" style={{ width: '92%' }} />
+            <div className="sk" style={{ width: '64%' }} />
           </div>
         </div>
       </div>
