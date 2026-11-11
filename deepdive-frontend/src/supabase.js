@@ -1,17 +1,16 @@
-import { createClient } from '@supabase/supabase-js'
+import { useMemo } from "react";
+import { useSession } from "@clerk/clerk-react";
+import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-
-export const supabaseClient = async (clerkToken) => {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Missing Supabase configuration. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.")
-  }
-  if (!clerkToken) {
-    throw new Error("A Clerk Supabase JWT is required to access report history.")
-  }
-
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: `Bearer ${clerkToken}` } },
-  })
+// Clerk's native Supabase integration: Supabase receives Clerk's own session token.
+// No JWT template needed. The token must carry role=authenticated (see README).
+export function useSupabase() {
+  const { session } = useSession();
+  return useMemo(
+    () =>
+      createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY, {
+        accessToken: async () => (await session?.getToken()) ?? null,
+      }),
+    [session]
+  );
 }
