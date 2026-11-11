@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import html2pdf from "html2pdf.js";
 import { SignedIn, SignedOut, SignIn, UserButton, useUser, useSession } from "@clerk/clerk-react";
 import { supabaseClient } from "./supabase";
+import { Analytics } from "@vercel/analytics/react";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -426,6 +427,7 @@ export default function DeepDive() {
           </div>
         </div>
       </SignedIn>
+      <Analytics />
     </div>
   );
 }
